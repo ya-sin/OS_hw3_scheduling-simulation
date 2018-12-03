@@ -34,15 +34,20 @@ typedef struct node {
 	struct node* lnext;
 } Node;
 
-Node* front, *rear;
-Node* lfront, *lrear;
+Node* front, *rear; // job queuq
+Node* lfront, *lrear;// ready queue
 int PID;
 struct itimerval new_value,old_value;
 
-void creatQ();
+void simulator();
+void add2ready(Node *newnode);
 void add2jobq( char* name, int time_Quant, int prior);
-void removeQ(int pid);
-void showQ();
+void rmjobq(int pid);
+void printjobq();
+
+
+void set_S_time();
+void get_time();
 
 void hw_suspend(int msec_10);
 void hw_wakeup_pid(int pid);
