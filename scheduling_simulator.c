@@ -14,83 +14,11 @@ void creatQ()
 	lfront = lrear = (Node*)malloc(sizeof(Node));
 	lfront->lnext = lrear->lnext = NULL;
 }
-void addQ( char* name, int Q_time, int prior)
-{
-	if(strlen(name)!=5) {
-		printf("TASK_NAME ERROR.\n");
-		return ;
-	}
-	if(!strncmp(name,"Task",4)||!strncmp(name,"task",4)) {
-		if(name[4]>='1'&&name[4]<='6') {
-			Node *newnode;
-			newnode = (Node*)malloc(sizeof(Node));
-			if(front->next == NULL) {
-				front->next = newnode;
-			}
-			newnode->pid = ++PID;
-			newnode->Q_time = Q_time;
-			newnode->prior = prior;
-			newnode->W_time = 0;
-			strcpy(newnode->name,name);
-			strcpy(newnode->state, "TASK_READY");
-			newnode->next = NULL;
-			rear->next = newnode;
-			rear = newnode;
-		} else {
-			printf("TASK_NAME ERROR.\n");
-			return ;
-		}
-	} else {
-		printf("TASK_NAME ERROR.\n");
-		return ;
-	}
-}
-
-void removeQ(int pid)
-{
-	Node* rmnode;
-	Node* tmpnode;
-	if(front->next == NULL) {
-		printf("List is empty, you have nothing to remove!\n ");
-		return;
-	}
-	tmpnode = front;
-	while(tmpnode->next != NULL) {
-		rmnode = tmpnode->next;
-		if(rmnode->pid == pid && front->next->next == NULL) {
-			front->next=NULL;
-			rear = (Node*)malloc(sizeof(Node));
-			rear->next = NULL;
-			free(rmnode);
-			return;
-		} else if(rmnode->pid == pid) {
-			tmpnode->next = rmnode->next;
-			rmnode->next = NULL;
-			free(rmnode);
-			return;
-		}
-		tmpnode = tmpnode->next;
-	}
-}
-void showQ()
-{
-	Node* tmpnode;
-	tmpnode = front->next;
-	printf("PID TASK_NAME TASK_STATE QUEUEING_TIME PRIORITY QUANTUM\n");
-	while(tmpnode != NULL) {
-		printf("%-3d  %s    %-18s%lld         %d       %d\n",tmpnode->pid,tmpnode->name,
-		       tmpnode->state,
-		       tmpnode->W_time, tmpnode->prior, tmpnode->Q_time);
-		tmpnode = tmpnode->next;
-	}
-
-}
-
 void shell(void)
 {
 	char tmp[100];
 	char name[100];
-	int Q_time=0;
+	int time_Quant=0;
 	int prior = 0;
 	int pid;
 	char opt_T[50];
@@ -108,9 +36,9 @@ void shell(void)
 			memset(priority,0,50);
 			sscanf(tmp,"%s%s%s%s",opt_T,time,opt_P,priority);
 			if(!strcmp(opt_T,"-t")) {
-				if(!strcmp(time,"L"))    Q_time=20;
-				else if(!strcmp(time,"S"))    Q_time=10;
-			} else if(strlen(opt_T)==0&&strlen(time)==0)    Q_time=10;
+				if(!strcmp(time,"L"))    time_Quant=20;
+				else if(!strcmp(time,"S"))    time_Quant=10;
+			} else if(strlen(opt_T)==0&&strlen(time)==0)    time_Quant=10;
 			else {
 				printf("Input error.\n");
 				continue;
@@ -124,7 +52,8 @@ void shell(void)
 				continue;
 			}
 			printf("%d\n",prior);
-			addQ(name, Q_time, prior);
+			// add the new task to the job queue
+			add2jobq(name, time_Quant, prior);
 		} else if(!strcmp(tmp,"remove")) {
 			scanf("%d",&pid);
 			removeQ(pid);
@@ -138,6 +67,97 @@ void shell(void)
 		}
 	}
 }
+
+void add2jobq( char* name, int time_Quant, int prior)
+{
+	// the length of task's name should be equal to 5 
+	if(strlen(name)!=5) {
+		printf("TASK_NAME ERROR.\n");
+		return ;
+	}
+	// the task's name should be in the "taskx/Taskx "format
+	// x = 1~6
+	if(!strncmp(name,"Task",4)||!strncmp(name,"task",4)) {
+		if(name[4]>='1'&&name[4]<='6') {
+			// melloc a new node
+			Node *newnode;
+			newnode = (Node*)malloc(sizeof(Node));
+			// setting the new node(except start_time, lnext and sleep_time )
+			if(front->next == NULL) {
+				front->next = newnode;
+			}
+			newnode->pid = ++PID;
+			newnode->time_Quant = time_Quant;
+			newnode->prior = prior;
+			newnode->queuing_T = 0;
+			strcpy(newnode->task_name,name);
+			strcpy(newnode->task_state, "TASK_READY");
+			// change the new node's context
+
+			//
+			newnode->next = NULL;
+			rear->next = newnode;
+			rear = newnode;
+			// add the new node to the ready queue
+			// add2ready()
+		} else {
+			printf("ERROR TASK_NUMBER.\n");
+			printf("the range of number is 1~6 ");
+			return ;
+		}
+	} else {
+		printf("TASK_NAME ERROR.\n");
+		printf("EX: task1 / Task1\n");
+		return ;
+	}
+}
+
+void removeQ(int pid)
+{
+	Node* rmnode;
+	Node* tmpnode;
+	// job queue is empty
+	if(front->next == NULL) {
+		printf("List is empty, you have nothing to remove!\n ");
+		return;
+	}
+	// job queue is not empty
+	tmpnode = front;
+	while(tmpnode->next != NULL) {
+		rmnode = tmpnode->next;
+		// job queue has only one node
+		if(rmnode->pid == pid && front->next->next == NULL) {
+			front->next=NULL;
+			rear = (Node*)malloc(sizeof(Node));
+			rear->next = NULL;
+			free(rmnode);
+			return;
+		} else if(rmnode->pid == pid) {
+			tmpnode->next = rmnode->next;
+			if(rmnode->next == NULL)
+				rear = tmpnode;
+			else
+				rmnode->next = NULL;
+			free(rmnode);
+			return;
+		}
+		tmpnode = tmpnode->next;
+	}
+}
+void showQ()
+{
+	Node* tmpnode;
+	tmpnode = front->next;
+	printf("PID TASK_NAME TASK_STATE QUEUEING_TIME PRIORITY QUANTUM\n");
+	while(tmpnode != NULL) {
+		printf("%-3d  %s    %-18s%lld         %d       %d\n",tmpnode->pid,tmpnode->task_name,
+		       tmpnode->task_state,
+		       tmpnode->queuing_T, tmpnode->prior, tmpnode->time_Quant);
+		tmpnode = tmpnode->next;
+	}
+
+}
+
 
 void hw_suspend(int msec_10)
 {

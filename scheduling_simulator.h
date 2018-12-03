@@ -22,12 +22,12 @@ enum TASK_STATE {
 
 typedef struct node {
 	int pid;
-	char name[100];
-	char state[20];
-	int Q_time; //time quantum
+	char task_name[100];
+	char task_state[20];
+	int time_Quant; //time quantum
 	int prior;
 	long long int S_time; //enter ready Q time
-	long long int W_time; //queueing time
+	long long int queuing_T; //queueing time
 	int Sleep_time; //suspend time
 	ucontext_t task;
 	struct node* next;
@@ -40,7 +40,7 @@ int PID;
 struct itimerval new_value,old_value;
 
 void creatQ();
-void addQ( char* name, int Q_time, int prior);
+void add2jobq( char* name, int time_Quant, int prior);
 void removeQ(int pid);
 void showQ();
 
