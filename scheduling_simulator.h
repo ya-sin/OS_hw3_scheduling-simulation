@@ -36,18 +36,22 @@ typedef struct node {
 
 Node* front, *rear; // job queuq
 Node* lfront, *lrear;// ready queue
+Node* runnode;
 int PID;
 struct itimerval new_value,old_value;
 
+Node * pop_readyq();
+bool check_terminate();
 void simulator();
 void add2ready(Node *newnode);
 void add2jobq( char* name, int time_Quant, int prior);
 void rmjobq(int pid);
+void rmreadyq(int pid);
 void printjobq();
 
 
 void set_S_time();
-void get_time();
+long get_time();
 
 void hw_suspend(int msec_10);
 void hw_wakeup_pid(int pid);
