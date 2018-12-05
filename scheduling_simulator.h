@@ -28,7 +28,7 @@ typedef struct node {
 	int prior;
 	long long int S_time; //enter ready Q time
 	long long int queuing_T; //queueing time
-	int Sleep_time; //suspend time
+	int suspendT; //suspend time
 	ucontext_t task;
 	struct node* next;
 	struct node* lnext;

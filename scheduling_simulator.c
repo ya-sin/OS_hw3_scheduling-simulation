@@ -2,6 +2,7 @@
 static ucontext_t shell_context;
 static ucontext_t start;
 static ucontext_t end;
+static ucontext_t current;
 void set_timer(int time_Quant)
 {
 	new_value.it_value.tv_sec = 0;
@@ -25,9 +26,9 @@ Node * pop_readyq()
 		lfront -> lnext = popnode -> lnext;
 	}
 	popnode->lnext = NULL;
-	printf("qT: %lld start: %lld\n",popnode->queuing_T,popnode->S_time);
+	// printf("qT: %lld start: %lld\n",popnode->queuing_T,popnode->S_time);
 	long a = get_time();
-	printf("get time %ld\n",a);
+	// printf("get time %ld\n",a);
 	popnode->queuing_T = popnode->queuing_T + (a-popnode->S_time);
 	return popnode;
 }
@@ -54,6 +55,8 @@ bool check_terminate()
 void terminal(){
 	while(1){
 		set_timer(0);
+		if(runnode==NULL)
+			return;
 		strcpy(runnode->task_state,"TASK_TERMINATED");
 		runnode = NULL;
 		swapcontext(&end,&start);
@@ -81,9 +84,9 @@ void simulator(){
 				printf("%d %lld\n",runtask->pid,runtask->queuing_T);
 				
 				runnode = runtask;
-				strcpy(runnode->task_state, "TASK_RUNNING");
-				set_timer(runnode->time_Quant);
-				swapcontext(&start,&runnode->task);
+				strcpy(runtask->task_state, "TASK_RUNNING");
+				set_timer(runtask->time_Quant);
+				swapcontext(&start,&runtask->task);
 			}
 
 			// printf("soo");
@@ -94,6 +97,19 @@ void simulator(){
 }
 void dormerq()
 {
+	// everytime when the time quantum time out will call this function
+	// 1. decrease  sleep time of all the task in the wating Q
+	// 2. change thhe runnode
+	Node *tmpnode;
+	tmpnode = front->next;
+	while(tmpnode!=NULL){
+		if(!strcmp(tmpnode->task_state,"TASK_WAITING")){
+			tmpnode->suspendT = tmpnode->suspendT - runnode->time_Quant;
+			if(tmpnode->suspendT<=0)
+				add2ready(tmpnode);
+		}
+		tmpnode = tmpnode->next;
+	}
 	add2ready(runnode);
 	Node *task = pop_readyq();
 	strcpy(task->task_state, "TASK_RUNNIG");
@@ -109,13 +125,13 @@ void sighandler(int mode){
 			break;
 		case SIGTSTP:
 			printf("Catch Ctrl+Z\n");
-			// if(now!=NULL) {
-			// 	add_ready_q(now);
-			// 	now = NULL;
-			// 	set_timer(0);
-			// }
-			// getcontext(&current);
-			// swapcontext(&current,&shell_context);
+			if(runnode!=NULL) {
+				add2ready(runnode);
+				runnode = NULL;
+				set_timer(0);
+			}
+			getcontext(&current);
+			swapcontext(&current,&shell_context);
 			break;
 		default:
 			printf("SIGNAL ERROR.\n");
@@ -142,10 +158,10 @@ int main()
 	// setting the end context
 	char *stack = (char*)malloc(8192);
 	getcontext(&end);
-	start.uc_stack.ss_flags = 0;
-	start.uc_stack.ss_size = 8192;
-	start.uc_stack.ss_sp = stack;
-	start.uc_link = NULL;
+	end.uc_stack.ss_flags = 0;
+	end.uc_stack.ss_size = 8192;
+	end.uc_stack.ss_sp = stack;
+	end.uc_link = NULL;
 	makecontext(&end,terminal,0);
 
 	// setting the start context
@@ -156,7 +172,9 @@ int main()
 	start.uc_stack.ss_sp = stack2;
 	start.uc_link = NULL;
 	makecontext(&start,simulator,0);
+
 	shell();
+
 	return 0;
 }
 
@@ -237,7 +255,7 @@ void add2ready(Node *newnode)
 	gettimeofday(&now,NULL);
 	strcpy(newnode->task_state, "TASK_READY");
 	newnode->S_time = (now.tv_sec)*1000 + (now.tv_usec)/1000;
-	printf("add2readyq %lld\n",newnode->S_time);
+	// printf("add2readyq %lld\n",newnode->S_time);
 }
 
 void add2jobq( char* name, int time_Quant, int prior)
@@ -404,7 +422,7 @@ void set_S_time(){
 	while(tmpnode != NULL){
 		gettimeofday(&start_T,NULL);
 		tmpnode->S_time = (start_T.tv_sec)*1000 + (start_T.tv_usec)/1000;
-		printf("pid: %d start time: %lld\n",tmpnode->pid,tmpnode->S_time);
+		// printf("pid: %d start time: %lld\n",tmpnode->pid,tmpnode->S_time);
 		tmpnode = tmpnode->next;
 	}
 }
@@ -415,21 +433,46 @@ long get_time(){
 }
 void hw_suspend(int msec_10)
 {
+	set_timer(0);
+	Node *tmpnode;
+	runnode->suspendT = msec_10*10;
+	strcpy(runnode->task_state,"TASK_WAITING");
+	tmpnode = runnode;
+	runnode = NULL;
+	swapcontext(&tmpnode->task,&start);
 	return;
 }
 
 void hw_wakeup_pid(int pid)
 {
+	Node *tmpnode;
+	tmpnode = front->next;
+	while(tmpnode!=NULL){
+		if(tmpnode->pid == pid)
+			add2ready(tmpnode);
+		tmpnode = tmpnode->next;
+	}
 	return;
 }
 
 int hw_wakeup_taskname(char *task_name)
 {
-    return 0;
+	Node *tmpnode;
+	int count = 0;
+	tmpnode = front->next;
+	while(tmpnode!=NULL){
+		if(!strcmp(tmpnode->task_name,task_name)){
+			add2ready(tmpnode);
+			count++;
+		}
+		tmpnode = tmpnode->next;
+	}
+    return count;
 }
 
 int hw_task_create(char *task_name)
 {
-    return 0; // the pid of created task name
+	add2jobq(task_name,10,0);
+	return PID;
 }
 
