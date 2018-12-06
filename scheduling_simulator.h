@@ -13,30 +13,25 @@
 
 #include "task.h"
 
-static ucontext_t shell_context;// (record shell status)
-static ucontext_t start;
-static ucontext_t end;
-static ucontext_t current;
-
 enum TASK_STATE {
-	TASK_RUNNING,
-	TASK_READY,
-	TASK_WAITING,
-	TASK_TERMINATED
+    TASK_RUNNING,
+    TASK_READY,
+    TASK_WAITING,
+    TASK_TERMINATED
 };
 
 typedef struct node {
-	int pid;
-	char task_name[100];
-	char task_state[20];
-	int time_Quant; //time quantum
-	int prior;
-	long long int S_time; //enter ready Q time
-	long long int queuing_T; //queueing time
-	int suspendT; //suspend time
-	ucontext_t task;
-	struct node* next; // job queue ptr
-	struct node* lnext; // ready queue ptr
+    int pid;
+    char task_name[100];
+    char task_state[20];
+    int time_Quant; //time quantum
+    int prior;
+    long long int S_time; //enter ready Q time
+    long long int queuing_T; //queueing time
+    int suspendT; //suspend time
+    ucontext_t task;
+    struct node* next; // job queue ptr
+    struct node* lnext; // ready queue ptr
 } Node;
 
 Node* front, *rear; // job queue
