@@ -1,10 +1,118 @@
 #include "scheduling_simulator.h"
-static ucontext_t shell_context;
-static ucontext_t start;
-static ucontext_t end;
-static ucontext_t current;
+
+int main()
+{
+	// init signal(for time quntum and ctrl-Z)
+	struct sigaction act;
+	act.sa_handler = &sighandler;
+	sigemptyset(&act.sa_mask);
+	sigaddset(&act.sa_mask, SIGALRM);
+	sigaddset(&act.sa_mask, SIGTSTP);
+	act.sa_flags = 0;
+	assert(sigaction(SIGALRM, &act, NULL)<=0);
+	assert(sigaction(SIGTSTP, &act, NULL)<=0);
+
+	// creat job Q and ready Q
+	front = rear = (Node*)malloc(sizeof(Node));
+	front->next = rear->next = NULL;
+	lfront = lrear = (Node*)malloc(sizeof(Node));
+	lfront->lnext = lrear->lnext = NULL;
+
+	// setting the end context(if tassk finish  the function in task.c, calling terminal()
+	char *stack = (char*)malloc(8192);
+	getcontext(&end);
+	end.uc_stack.ss_flags = 0;
+	end.uc_stack.ss_size = 8192;
+	end.uc_stack.ss_sp = stack;
+	end.uc_link = NULL;
+	makecontext(&end,terminal,0);
+
+	// setting the start context(record simulation status)
+	char *stack2 = (char*)malloc(8192);
+	getcontext(&start);
+	start.uc_stack.ss_flags = 0;
+	start.uc_stack.ss_size = 8192;
+	start.uc_stack.ss_sp = stack2;
+	start.uc_link = NULL;
+	makecontext(&start,simulator,0);
+
+	shell();
+
+	return 0;
+}
+
+void shell(void)
+{
+	getcontext(&shell_context);
+	char tmp[100];
+	char dst[100];
+	char name[100];
+	int pid;
+	char *token;
+	// t -> flag = 1;
+	// p -> flag = 2;
+	while(printf("$")) {
+		int time_Quant=10;
+		int prior = 0;
+		int j = 0,i = 0,flag = 0;
+		token = NULL;
+		scanf("%s",tmp);
+		if(!strcmp(tmp,"add")) {
+			scanf("%s",name);
+			fgets(tmp,sizeof(tmp),stdin);
+			if(tmp[0]==' ')
+				i = 1;
+			for(i;tmp[i] != '\0';i++){
+				if(tmp[i]=='\n')
+					continue;
+				dst[j] = tmp[i];
+				j++;
+			}
+			token = strtok(dst," ");
+			while(token!=NULL){
+				if(!strcmp(token,"-t"))
+					flag =1;
+				if(!strcmp(token,"-p"))
+					flag =2;
+				if(!strcmp(token,"S")&&flag==1)
+					time_Quant = 10;
+				if(!strcmp(token,"L")&&flag==1)
+					time_Quant = 20;
+				if(!strcmp(token,"H")&&flag==2){
+					prior = 1;
+				}
+				if(!strcmp(token,"L")&&flag==2){
+					prior = 0;
+				}
+				token = strtok(NULL," ");
+			}		
+			printf("prio:%d Q:%d\n",prior,time_Quant);
+			// add the new task to the job queue
+			add2jobq(name, time_Quant, prior);
+		} else if(!strcmp(tmp,"remove")) {
+			scanf("%d",&pid);
+			rmjobq(pid);
+		} else if(!strcmp(tmp,"start")) {
+			// keep the time at this point in the task struct->S-time
+			set_S_time();
+			printf("simulating...\n");
+			// swap to start mode,store the shell mode
+			// right after that,executing the first task in the ready queue
+			swapcontext(&shell_context,&start);
+		} else if(!strcmp(tmp,"ps")) {
+			printjobq();
+		} else if(!strcmp(tmp,"tm")){
+			trerminateall();
+		} else {
+			printf(" %s: command not found \n",tmp);
+			printf("command: add, remove, ps,and start ");
+			continue;
+		}
+	}
+}
 void set_timer(int time_Quant)
 {
+	// setting one time timer
 	new_value.it_value.tv_sec = 0;
 	new_value.it_value.tv_usec = time_Quant*1000;
 	new_value.it_interval.tv_sec = 0;
@@ -54,6 +162,7 @@ bool check_terminate()
 }
 void terminal(){
 	while(1){
+		// clear the timer
 		set_timer(0);
 		if(runnode==NULL)
 			return;
@@ -81,7 +190,7 @@ void simulator(){
 				// swapcontext(&start,&shell_context);
 				exit(EXIT_FAILURE);
 			} else {
-				printf("%d %lld\n",runtask->pid,runtask->queuing_T);
+				// printf("%d %lld\n",runtask->pid,runtask->queuing_T);
 				
 				runnode = runtask;
 				strcpy(runtask->task_state, "TASK_RUNNING");
@@ -95,7 +204,7 @@ void simulator(){
 		}
 	}
 }
-void dormerq()
+void timeout()
 {
 	// everytime when the time quantum time out will call this function
 	// 1. decrease  sleep time of all the task in the wating Q
@@ -120,11 +229,13 @@ void dormerq()
 }
 void sighandler(int mode){
 	switch(mode) {
+		// time quntum
 		case SIGALRM:
-			dormerq();
+			timeout();
 			break;
+		// ctrl+Z
 		case SIGTSTP:
-			printf("Catch Ctrl+Z\n");
+			printf("Ctrl+Z\n");
 			if(runnode!=NULL) {
 				add2ready(runnode);
 				runnode = NULL;
@@ -136,108 +247,6 @@ void sighandler(int mode){
 		default:
 			printf("SIGNAL ERROR.\n");
 			break;
-	}
-}
-int main()
-{
-	struct sigaction stp;
-	stp.sa_handler = &sighandler;
-	sigemptyset(&stp.sa_mask);
-	sigaddset(&stp.sa_mask, SIGALRM);
-	sigaddset(&stp.sa_mask, SIGTSTP);
-	stp.sa_flags = 0;
-	assert(sigaction(SIGALRM, &stp, NULL)==0);
-	assert(sigaction(SIGTSTP, &stp, NULL)==0);
-
-	// creat job Q and ready Q
-	front = rear = (Node*)malloc(sizeof(Node));
-	front->next = rear->next = NULL;
-	lfront = lrear = (Node*)malloc(sizeof(Node));
-	lfront->lnext = lrear->lnext = NULL;
-
-	// setting the end context
-	char *stack = (char*)malloc(8192);
-	getcontext(&end);
-	end.uc_stack.ss_flags = 0;
-	end.uc_stack.ss_size = 8192;
-	end.uc_stack.ss_sp = stack;
-	end.uc_link = NULL;
-	makecontext(&end,terminal,0);
-
-	// setting the start context
-	char *stack2 = (char*)malloc(8192);
-	getcontext(&start);
-	start.uc_stack.ss_flags = 0;
-	start.uc_stack.ss_size = 8192;
-	start.uc_stack.ss_sp = stack2;
-	start.uc_link = NULL;
-	makecontext(&start,simulator,0);
-
-	shell();
-
-	return 0;
-}
-
-void shell(void)
-{
-	getcontext(&shell_context);
-	char tmp[100];
-	char name[100];
-	int time_Quant=0;
-	int prior = 0;
-	int pid;
-	char opt_T[50];
-	char opt_P[50];
-	char time[50];
-	char priority[50];
-	while(printf("$")) {
-		scanf("%s",tmp);
-		if(!strcmp(tmp,"add")) {
-			scanf("%s",name);
-			fgets(tmp,sizeof(tmp),stdin);
-			memset(opt_T,0,50);
-			memset(time,0,50);
-			memset(opt_P,0,50);
-			memset(priority,0,50);
-			sscanf(tmp,"%s%s%s%s",opt_T,time,opt_P,priority);
-			if(!strcmp(opt_T,"-t")) {
-				if(!strcmp(time,"L"))    time_Quant=20;
-				else if(!strcmp(time,"S"))    time_Quant=10;
-			} else if(strlen(opt_T)==0&&strlen(time)==0)    time_Quant=10;
-			else {
-				printf("Input error.\n");
-				continue;
-			}
-			if(!strcmp(opt_P,"-p")) {
-				if(!strcmp(priority,"H"))    prior=1;
-				else if(!strcmp(priority,"L"))    prior=0;
-			} else if(strlen(opt_P)==0&&strlen(priority)==0)    prior=0;
-			else {
-				printf("Input error.\n");
-				continue;
-			}
-			printf("%d\n",prior);
-			// add the new task to the job queue
-			add2jobq(name, time_Quant, prior);
-		} else if(!strcmp(tmp,"remove")) {
-			scanf("%d",&pid);
-			rmjobq(pid);
-		} else if(!strcmp(tmp,"start")) {
-			// keep the time at this point in the task struct->S-time
-			set_S_time();
-			printf("simulating...\n");
-			// swap to start mode,store the shell mode
-			// right after that,executing the first task in the ready queue
-			swapcontext(&shell_context,&start);
-		} else if(!strcmp(tmp,"ps")) {
-			printjobq();
-		} else if(!strcmp(tmp,"tm")){
-			trerminateall();
-		} else {
-			printf(" %s: command not found \n",tmp);
-			printf("command: add, remove, ps,and start ");
-			continue;
-		}
 	}
 }
 
@@ -288,7 +297,7 @@ void add2jobq( char* name, int time_Quant, int prior)
 			newnode->task.uc_stack.ss_sp = stack;
 			newnode->task.uc_stack.ss_size = 8192;
 			newnode->task.uc_stack.ss_flags = 0;
-			newnode->task.uc_link = &end;
+			newnode->task.uc_link = &end;// when task function finish go to the terminal()
 			switch(name[4]) {
 			case '1':
 				makecontext(&newnode->task,task1,0);
@@ -397,11 +406,20 @@ void printjobq()
 {
 	Node* tmpnode;
 	tmpnode = front->next;
+	char P,T;
 	printf("PID TASK_NAME TASK_STATE QUEUEING_TIME PRIORITY QUANTUM\n");
 	while(tmpnode != NULL) {
-		printf("%-3d  %s    %-18s%lld         %d       %d\n",tmpnode->pid,tmpnode->task_name,
+		if(tmpnode->prior)
+			P = 'H';
+		else
+			P = 'L';
+		if(tmpnode->time_Quant==20)
+			T = 'L';
+		else
+			T = 'S';
+		printf("%-3d  %s    %-18s%lld         %c       %c\n",tmpnode->pid,tmpnode->task_name,
 		       tmpnode->task_state,
-		       tmpnode->queuing_T, tmpnode->prior, tmpnode->time_Quant);
+		       tmpnode->queuing_T, P, T);
 		tmpnode = tmpnode->next;
 	}
 	printf("ready queue\n");
@@ -433,9 +451,10 @@ long get_time(){
 }
 void hw_suspend(int msec_10)
 {
+	// clear timer
 	set_timer(0);
 	Node *tmpnode;
-	runnode->suspendT = msec_10*10;
+	runnode->suspendT = msec_10*10;// ms
 	strcpy(runnode->task_state,"TASK_WAITING");
 	tmpnode = runnode;
 	runnode = NULL;

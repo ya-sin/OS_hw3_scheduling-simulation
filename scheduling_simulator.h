@@ -1,17 +1,22 @@
 #ifndef SCHEDULING_SIMULATOR_H
 #define SCHEDULING_SIMULATOR_H
 
-#include <stdio.h>
-#include <ucontext.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
-#include <signal.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <ucontext.h>
+#include <signal.h>
 #include <assert.h>
 
 #include "task.h"
+
+static ucontext_t shell_context;// (record shell status)
+static ucontext_t start;
+static ucontext_t end;
+static ucontext_t current;
 
 enum TASK_STATE {
 	TASK_RUNNING,
@@ -30,16 +35,24 @@ typedef struct node {
 	long long int queuing_T; //queueing time
 	int suspendT; //suspend time
 	ucontext_t task;
-	struct node* next;
-	struct node* lnext;
+	struct node* next; // job queue ptr
+	struct node* lnext; // ready queue ptr
 } Node;
 
-Node* front, *rear; // job queuq
+Node* front, *rear; // job queue
 Node* lfront, *lrear;// ready queue
 Node* runnode;
-int PID;
-struct itimerval new_value,old_value;
+int PID; // the current maximum pid in this system
+struct itimerval new_value,old_value; // for set_timer()
 
+// shell
+void shell();
+
+// signal
+void sighandler(int mode);
+
+//
+void timeout();
 Node * pop_readyq();
 bool check_terminate();
 void simulator();
@@ -49,7 +62,8 @@ void rmjobq(int pid);
 void rmreadyq(int pid);
 void printjobq();
 
-
+void terminal();
+void trerminateall();
 void set_S_time();
 long get_time();
 
@@ -58,6 +72,5 @@ void hw_wakeup_pid(int pid);
 int hw_wakeup_taskname(char *task_name);
 int hw_task_create(char *task_name);
 
-void shell();
 
 #endif
