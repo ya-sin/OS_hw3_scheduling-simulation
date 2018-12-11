@@ -43,24 +43,32 @@ struct itimerval new_value,old_value; // for set_timer()
 // shell
 void shell();
 
+// simulator
+void simulator();
+void set_S_time();
+bool check_terminate();
+
 // signal
 void sighandler(int mode);
-
-//
 void timeout();
-Node * pop_readyq();
-bool check_terminate();
-void simulator();
-void add2ready(Node *newnode);
+void set_timer(int time_Quant);
+
+// queuing time
+long get_time();
+
+// Q organize
 void add2jobq( char* name, int time_Quant, int prior);
+void add2ready(Node *newnode);
 void rmjobq(int pid);
 void rmreadyq(int pid);
 void printjobq();
+Node * pop_readyq();
 
+// terminate fnished task
 void terminal();
+
+// for test
 void trerminateall();
-void set_S_time();
-long get_time();
 
 void hw_suspend(int msec_10);
 void hw_wakeup_pid(int pid);
