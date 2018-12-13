@@ -34,27 +34,22 @@ typedef struct node {
     struct node* lnext; // ready queue ptr
 } Node;
 
+struct itimerval new_value,old_value; // for set_timer()
 Node* front, *rear; // job queue
 Node* lfront, *lrear;// ready queue
 Node* runnode;
 int PID; // the current maximum pid in this system
-struct itimerval new_value,old_value; // for set_timer()
 
 // shell
 void shell();
 
 // simulator
 void simulator();
-void set_S_time();
-bool check_terminate();
 
 // signal
 void sighandler(int mode);
 void timeout();
 void set_timer(int time_Quant);
-
-// queuing time
-long get_time();
 
 // Q organize
 void add2jobq( char* name, int time_Quant, int prior);
@@ -68,7 +63,7 @@ Node * pop_readyq();
 void terminal();
 
 // for test
-void trerminateall();
+// void trerminateall();
 
 void hw_suspend(int msec_10);
 void hw_wakeup_pid(int pid);

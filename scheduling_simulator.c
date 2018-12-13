@@ -90,7 +90,7 @@ void shell(void)
                 }
                 token = strtok(NULL," ");
             }
-            printf("prio:%d Q:%d\n",prior,time_Quant);
+            // printf("prio:%d Q:%d\n",prior,time_Quant);
             // add the new task to the job queue
             add2jobq(name, time_Quant, prior);
         } else if(!strcmp(tmp,"remove")) {
@@ -98,15 +98,22 @@ void shell(void)
             rmjobq(pid);
         } else if(!strcmp(tmp,"start")) {
             // keep the time at this point in the task struct->S-time
-            set_S_time();
+            // set_S_time
+            Node * tmpnode;
+            tmpnode = lfront->lnext;
+            while(tmpnode != NULL) {
+                struct timeval now;
+                gettimeofday(&now,NULL);
+                tmpnode->S_time = (now.tv_sec)*1000 + (now.tv_usec)/1000;
+                // printf("pid: %d start time: %lld\n",tmpnode->pid,tmpnode->S_time);
+                tmpnode = tmpnode->lnext;
+            }
             printf("simulating...\n");
             // swap to start mode,store the shell mode
             // right after that,executing the first task in the ready queue
             swapcontext(&shell_context,&start);
         } else if(!strcmp(tmp,"ps")) {
             printjobq();
-        } else if(!strcmp(tmp,"tm")) {
-            trerminateall();
         } else {
             printf(" %s: command not found \n",tmp);
             printf("command: add, remove, ps,and start\n");
@@ -115,74 +122,57 @@ void shell(void)
     }
 }
 
-void set_S_time()
-{
-    Node * tmpnode;
-    tmpnode = lfront->next;
-    while(tmpnode != NULL) {
-        tmpnode->S_time = get_time();
-        // printf("pid: %d start time: %lld\n",tmpnode->pid,tmpnode->S_time);
-        tmpnode = tmpnode->next;
-    }
-}
-
 void simulator()
 {
-    int test;
-    printf("im in simulator");
-    scanf("%d",&test);
+    // printf("im in simulator");
     while(1) {
-        if(test) {
-            if(check_terminate()) { // all the task in the job q are terminate
-                swapcontext(&start,&shell_context);
-            }
-            // pop a task from  the ready queue
-            Node *runtask;
-            runtask = pop_readyq();
+        Node *check;
+        Node *runtask;
 
-
-            if(runtask==NULL) { // has no task in the ready q, check for waiting queue
-                printf("has no task in the ready,check waiting Q\n");
-                usleep(10000);
-                Node *tmpnode;
-                tmpnode = front->next;
-                while(tmpnode!=NULL) {
-                    if(!strcmp(tmpnode->task_state,"TASK_WAITING")) {
-                        tmpnode->suspendT = tmpnode->suspendT - 10;
-                        if(tmpnode->suspendT<=0)
-                            add2ready(tmpnode);
-                    }
-                    tmpnode = tmpnode->next;
-                }
-                // swapcontext(&start,&shell_context);
-                // exit(EXIT_FAILURE);
-            } else {
-                // printf("%d %lld\n",runtask->pid,runtask->queuing_T);
-
-                runnode = runtask;
-                strcpy(runtask->task_state, "TASK_RUNNING");
-                set_timer(runtask->time_Quant);
-                swapcontext(&start,&runtask->task);
-            }
-
-            // printf("soo");
-            // swapcontext(&start,&shell_context);
-            // printf("hi");
+        int flag=1;//no task can do
+        check = front->next;
+        while(check!=NULL) {
+            // find one task's state != "TASK_TERMINATED"
+            if(strcmp(check->task_state,"TASK_TERMINATED"))
+                flag = 0;// have task can do
+            check = check -> next;
         }
-    }
-}
 
-bool check_terminate()
-{
-    Node *tmpnode;
-    tmpnode = front->next;
-    while(tmpnode!=NULL) {
-        // find one task's state != "TASK_TERMINATED"
-        if(strcmp(tmpnode->task_state,"TASK_TERMINATED"))
-            return 0;// have task can do
-        tmpnode = tmpnode -> next;
+        if(flag) { // all the task in the job q are terminate
+            swapcontext(&start,&shell_context);
+        }
+        // pop a task from  the ready queue
+        runtask = pop_readyq();
+
+        if(runtask==NULL) { // has no task in the ready q, check for waiting queue
+            printf("has no task in the ready,check waiting Q\n");
+            usleep(10000);
+            Node *tmpnode;
+            tmpnode = front->next;
+            while(tmpnode!=NULL) {
+                if(!strcmp(tmpnode->task_state,"TASK_WAITING")) {
+                    tmpnode->suspendT = tmpnode->suspendT - 10;
+                    if(tmpnode->suspendT<=0)
+                        add2ready(tmpnode);
+                }
+                tmpnode = tmpnode->next;
+            }
+            // swapcontext(&start,&shell_context);
+            // exit(EXIT_FAILURE);
+        } else {
+            // printf("%d %lld\n",runtask->pid,runtask->queuing_T);
+
+            runnode = runtask;
+            strcpy(runtask->task_state, "TASK_RUNNING");
+            set_timer(runtask->time_Quant);
+            swapcontext(&start,&runtask->task);
+        }
+
+        // printf("soo");
+        // swapcontext(&start,&shell_context);
+        // printf("hi");
     }
-    return 1;//no task can do
+
 }
 
 Node * pop_readyq()
@@ -221,7 +211,10 @@ Node * pop_readyq()
     }
     popnode->lnext = NULL;
     // printf("qT: %lld start: %lld\n",popnode->queuing_T,popnode->S_time);
-    long a = get_time();
+    struct timeval now;
+    long a = 0;
+    gettimeofday(&now,NULL);
+    a = (now.tv_sec)*1000 + (now.tv_usec)/1000;
     // printf("get time %ld\n",a);
     popnode->queuing_T = popnode->queuing_T + (a-popnode->S_time);
     return popnode;
@@ -314,6 +307,9 @@ void add2jobq( char* name, int time_Quant, int prior)
 
 void add2ready(Node *newnode)
 {
+    struct timeval now;
+
+    gettimeofday(&now,NULL);
     if(lfront->lnext == NULL) {
         lfront->lnext = newnode;
     }
@@ -321,15 +317,8 @@ void add2ready(Node *newnode)
     lrear->lnext = newnode;
     lrear = newnode;
     strcpy(newnode->task_state, "TASK_READY");
-    newnode->S_time = get_time();
+    newnode->S_time = (now.tv_sec)*1000 + (now.tv_usec)/1000;
     // printf("add2readyq %lld\n",newnode->S_time);
-}
-
-long get_time()
-{
-    struct timeval now;
-    gettimeofday(&now,NULL);
-    return (now.tv_sec)*1000 + (now.tv_usec)/1000;
 }
 
 void rmjobq(int pid)
@@ -416,25 +405,15 @@ void printjobq()
         printf("%-3d  %s    %-18s%lld         %c       %c\n",tmpnode->pid,tmpnode->task_name,tmpnode->task_state,tmpnode->queuing_T, P, T);
         tmpnode = tmpnode->next;
     }
-    printf("ready queue\n");
-    tmpnode = lfront -> lnext;
-    while(tmpnode != NULL) {
-        printf("%-3d  %s    %-18s%lld         %d       %d\n",tmpnode->pid,tmpnode->task_name,
-               tmpnode->task_state,
-               tmpnode->queuing_T, tmpnode->prior, tmpnode->time_Quant);
-        tmpnode = tmpnode->lnext;
-    }
+    // printf("ready queue\n");
+    // tmpnode = lfront -> lnext;
+    // while(tmpnode != NULL) {
+    //     printf("%-3d  %s    %-18s%lld         %d       %d\n",tmpnode->pid,tmpnode->task_name,
+    //            tmpnode->task_state,
+    //            tmpnode->queuing_T, tmpnode->prior, tmpnode->time_Quant);
+    //     tmpnode = tmpnode->lnext;
+    // }
 
-}
-
-void trerminateall()
-{
-    Node *tmpnode;
-    tmpnode = front->next;
-    while(tmpnode!=NULL) {
-        strcpy(tmpnode->task_state, "TASK_TERMINATED");
-        tmpnode = tmpnode -> next;
-    }
 }
 
 void terminal()
@@ -532,9 +511,9 @@ int hw_wakeup_taskname(char *task_name)
     int count = 0;
     tmpnode = front->next;
     while(tmpnode!=NULL) {
-        if(!strcmp(tmpnode->task_name,task_name)) {
+        if(!strcmp(tmpnode->task_name,task_name)&&!strcmp(tmpnode->task_state,"TASK_WAITING")) {
             add2ready(tmpnode);
-            count = count +1;
+            count = count+1;
         }
         tmpnode = tmpnode->next;
     }
